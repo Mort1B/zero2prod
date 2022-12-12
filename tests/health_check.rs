@@ -27,6 +27,30 @@ async fn spawn_app() -> TestApp {
     }
 }
 
+pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    // Create database
+    let mut connection = PgConnection::connect(&config.connection_string_without_db())
+        .await
+        .expect("Failed to connect to postgres.");
+
+    connection
+        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
+        .await
+        .expect("Failed to create DB");
+
+    // Migrate database
+    let connection_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("Failed to connect to postgres");
+
+    sqlx::migrate!("./migrations")
+        .run(&connection_pool)
+        .await
+        .expect("Failed to migrate db");
+
+    connection_pool
+}
+
 #[tokio::test]
 async fn health_check_works() {
     //Arrange
@@ -101,28 +125,4 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             error_message
         )
     }
-}
-
-pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    // Create database
-    let mut connection = PgConnection::connect(&config.connection_string_without_db())
-        .await
-        .expect("Failed to connect to postgres.");
-
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
-        .await
-        .expect("Failed to create DB");
-
-    // Migrate database
-    let connection_pool = PgPool::connect(&config.connection_string())
-        .await
-        .expect("Failed to connect to postgres");
-
-    sqlx::migrate!("./migrations")
-        .run(&connection_pool)
-        .await
-        .expect("Failed to migrate db");
-
-    connection_pool
 }
